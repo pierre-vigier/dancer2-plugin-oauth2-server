@@ -1,4 +1,6 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+
+0.01  2015-11-22 14:41:48 SGT
         - Initial release

@@ -37,6 +37,14 @@
       },
       "runtime" : {
          "requires" : {
+            "Carp" : "0",
+            "Class::Load" : "0",
+            "Crypt::PRNG" : "0",
+            "Dancer2" : "0.163000",
+            "Dancer2::Plugin" : "0",
+            "MIME::Base64" : "0",
+            "URI" : "0",
+            "URI::QueryParam" : "0",
             "perl" : "5.008005"
          }
       },
