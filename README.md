@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/pierre-vigier/dancer2-plugin-oauth2-server.svg?branch=master)](https://travis-ci.org/pierre-vigier/dancer2-plugin-oauth2-server)
+
 # NAME
 
 Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization Server / Resource Server with Dancer2
