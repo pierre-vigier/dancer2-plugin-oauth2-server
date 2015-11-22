@@ -1,0 +1,11 @@
+language: perl
+
+perl:
+    - "5.10"
+
+before_install:
+  - cpanm Test::More
+  - cpanm --installdeps .
+
+script:
+  - prove -Ilib 
