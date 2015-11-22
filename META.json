@@ -1,5 +1,5 @@
 {
-   "abstract" : "Blah blah blah",
+   "abstract" : "Easier implementation of an OAuth2 Authorization Server / Resource Server with Dancer2 Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-oauth2-server",
    "author" : [
       "Pierre Vigier <pierre.vigier@gmail.com>"
    ],
@@ -47,6 +47,17 @@
       }
    },
    "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/pierre-vigier/dancer2-plugin-oauth2-server/issues"
+      },
+      "homepage" : "https://github.com/pierre-vigier/dancer2-plugin-oauth2-server",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/pierre-vigier/dancer2-plugin-oauth2-server.git",
+         "web" : "https://github.com/pierre-vigier/dancer2-plugin-oauth2-server"
+      }
+   },
    "version" : "0.01"
 }
 

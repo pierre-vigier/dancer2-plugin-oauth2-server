@@ -1,6 +1,7 @@
 # NAME
 
-Dancer2::Plugin::OAuth2::Server - Blah blah blah
+Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization Server / Resource Server with Dancer2
+Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-oauth2-server
 
 # SYNOPSIS
 
@@ -8,7 +9,7 @@ Dancer2::Plugin::OAuth2::Server - Blah blah blah
 
 # DESCRIPTION
 
-Dancer2::Plugin::OAuth2::Server is
+Dancer2::Plugin::OAuth2::Server is a port of Mojolicious plugin for OAuth2 server
 
 # AUTHOR
 
