@@ -11,4 +11,7 @@ requires "MIME::Base64";
 
 on test => sub {
     requires 'Test::More', '0.96';
+    requires 'HTTP::Request';
+    requires 'Plack::Test';
+    requires 'YAML::XS';
 };
