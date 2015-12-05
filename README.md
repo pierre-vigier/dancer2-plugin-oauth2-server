@@ -9,6 +9,10 @@ Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-o
 
     use Dancer2::Plugin::OAuth2::Server;
 
+    To protect a route, declare it like following:
+
+    get '/protected' => oauth_scopes 'desired_scope' => sub { ... }
+
 # DESCRIPTION
 
 Dancer2::Plugin::OAuth2::Server is a port of Mojolicious plugin for OAuth2 server

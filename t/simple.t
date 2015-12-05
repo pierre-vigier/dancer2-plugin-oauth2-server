@@ -1,6 +1,6 @@
 use strict;
 use Plack::Test;
-use Test::More tests => 10;
+use Test::More tests => 48;
 use HTTP::Request;
 use HTTP::Request::Common;
 use t::lib::Simple::App;
