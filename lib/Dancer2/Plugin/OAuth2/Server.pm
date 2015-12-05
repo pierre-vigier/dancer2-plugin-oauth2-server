@@ -15,7 +15,6 @@ my $server = undef;
 on_plugin_import {
     my $dsl      = shift;
     my $settings = plugin_setting;
-
     my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
     my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
 
@@ -25,7 +24,7 @@ on_plugin_import {
         confess "Cannot load server class $server_class: $error";
     }
 
-    $server = $server_class->new(
+    $server //= $server_class->new(
         dsl         => $dsl,
         settings    => $settings,
     );
@@ -42,11 +41,23 @@ on_plugin_import {
     );
 };
 
-register 'oauth' => sub {
-    my $dsl = shift;
+register 'oauth_scopes' => sub {
+    my ($dsl, $scopes, $code_ref) = plugin_args(@_);
+
     my $settings = plugin_setting;
-    my @res = _verify_access_token_and_scope( $dsl, $settings,$server,0,@_ );
-    return $res[0];
+
+    $scopes = [$scopes] unless ref $scopes eq 'ARRAY';
+
+    return sub {
+        my @res = _verify_access_token_and_scope( $dsl, $settings,$server,0, @$scopes );
+
+        if( not $res[0] ) {
+            $dsl->status( 400 );
+            return $dsl->to_json( { error => $res[1] } );
+        } else {
+            goto $code_ref;
+        }
+    }
 };
 
 sub _authorization_request {
@@ -123,11 +134,9 @@ sub _authorization_request {
 
 sub _access_token_request {
     my ($dsl, $settings, $server) = @_;
-
     my ( $client_id,$client_secret,$grant_type,$auth_code,$url,$refresh_token )
         = map { $dsl->param( $_ ) // undef }
         qw/ client_id client_secret grant_type code redirect_uri refresh_token /;
-
     if (
         ! defined( $grant_type )
             or ( $grant_type ne 'authorization_code' and $grant_type ne 'refresh_token' )
@@ -207,7 +216,7 @@ sub _verify_access_token_and_scope {
     my $access_token;
 
     if ( ! $refresh_token ) {
-        if ( my $auth_header = $dsl->request->header( 'Authorization' ) ) {
+        if ( my $auth_header = $dsl->app->request->header( 'Authorization' ) ) {
             my ( $auth_type,$auth_access_token ) = split( / /,$auth_header );
 
             if ( $auth_type ne 'Bearer' ) {

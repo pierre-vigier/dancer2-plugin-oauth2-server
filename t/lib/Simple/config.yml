@@ -1,3 +1,4 @@
+#logger: null
 plugins:
   "OAuth2::Server":
     clients:
@@ -9,7 +10,7 @@ plugins:
       client2:
         client_secret: secret2
         scopes:
-          identity: 0
+          identity: 1
           other: 1
     authorize_route: /authorize
     access_token_route: /access_token

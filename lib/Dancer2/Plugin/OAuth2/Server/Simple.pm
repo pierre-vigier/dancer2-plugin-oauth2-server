@@ -250,8 +250,6 @@ sub store_access_token {
 
     $AUTH_CODES{$auth_code}{access_token} = $access_token;
 
-$self->dsl->error( \%ACCESS_TOKENS );
-
     return $c_id;
 }
 
