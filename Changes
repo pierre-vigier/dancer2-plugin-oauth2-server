@@ -2,6 +2,9 @@ Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
 
+0.03  2015-12-05 12:49:48 SGT
+        - Publication to CPAN
+
 0.02  2015-12-05 12:39:37 SGT
         - Fix the route protection mechanism
         - Bug fixing in scope management

@@ -3,7 +3,7 @@ package Dancer2::Plugin::OAuth2::Server;
 use strict;
 use warnings;
 use 5.008_005;
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 use Dancer2::Plugin;
 use URI;
 use URI::QueryParam;
