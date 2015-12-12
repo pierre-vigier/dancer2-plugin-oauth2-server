@@ -1,6 +1,8 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+
+0.04  2015-12-12 21:22:29 SGT
         - Share the access token in "var" when Bearer access token is correct
 
 0.03  2015-12-05 12:49:48 SGT
