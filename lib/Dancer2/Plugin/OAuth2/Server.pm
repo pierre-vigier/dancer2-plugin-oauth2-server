@@ -50,11 +50,11 @@ register 'oauth_scopes' => sub {
 
     return sub {
         my @res = _verify_access_token_and_scope( $dsl, $settings,$server,0, @$scopes );
-
         if( not $res[0] ) {
             $dsl->status( 400 );
             return $dsl->to_json( { error => $res[1] } );
         } else {
+            $dsl->var( oauth_access_token => $res[0] );
             goto $code_ref;
         }
     }
