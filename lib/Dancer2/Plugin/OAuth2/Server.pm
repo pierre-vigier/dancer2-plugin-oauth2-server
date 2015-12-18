@@ -10,7 +10,16 @@ use URI::QueryParam;
 use Class::Load qw(try_load_class);
 use Carp;
 
-my $server = undef;
+sub get_server_class {
+    my ($settings) = @_;
+    my $server_class = $settings->{server_class}//"Dancer2::Plugin::OAuth2::Server::Simple";
+    my ($ok, $error) = try_load_class($server_class);
+    if (! $ok) {
+        confess "Cannot load server class $server_class: $error";
+    }
+
+    return $server_class->new();
+}
 
 on_plugin_import {
     my $dsl      = shift;
@@ -18,26 +27,15 @@ on_plugin_import {
     my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
     my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
 
-    my $server_class = $settings->{server_class}//"Dancer2::Plugin::OAuth2::Server::Simple";
-    my ($ok, $error) = try_load_class($server_class);
-    if (! $ok) {
-        confess "Cannot load server class $server_class: $error";
-    }
-
-    $server //= $server_class->new(
-        dsl         => $dsl,
-        settings    => $settings,
-    );
-
     $dsl->app->add_route(
         method  => 'get',
         regexp  => $authorization_route,
-        code    => sub { _authorization_request( $dsl, $settings, $server ) }
+        code    => sub { _authorization_request( $dsl, $settings ) }
     );
     $dsl->app->add_route(
         method  => 'post',
         regexp  => $access_token_route,
-        code    => sub { _access_token_request( $dsl, $settings, $server ) }
+        code    => sub { _access_token_request( $dsl, $settings ) }
     );
 };
 
@@ -49,7 +47,8 @@ register 'oauth_scopes' => sub {
     $scopes = [$scopes] unless ref $scopes eq 'ARRAY';
 
     return sub {
-        my @res = _verify_access_token_and_scope( $dsl, $settings,$server,0, @$scopes );
+        my $server = get_server_class( $settings );
+        my @res = _verify_access_token_and_scope( $dsl, $settings, $server,0, @$scopes );
         if( not $res[0] ) {
             $dsl->status( 400 );
             return $dsl->to_json( { error => $res[1] } );
@@ -61,10 +60,12 @@ register 'oauth_scopes' => sub {
 };
 
 sub _authorization_request {
-    my ($dsl, $settings, $server) = @_;
+    my ($dsl, $settings) = @_;
     my ( $c_id,$url,$type,$scope,$state )
         = map { $dsl->param( $_ ) // undef }
         qw/ client_id redirect_uri response_type scope state /;
+
+    my $server = get_server_class( $settings );
 
     my @scopes = $scope ? split( / /,$scope ) : ();
 
@@ -87,7 +88,7 @@ sub _authorization_request {
     }
 
     my $uri = URI->new( $url );
-    my ( $res,$error ) = $server->verify_client( $c_id, \@scopes );
+    my ( $res,$error ) = $server->verify_client($dsl, $settings, $c_id, \@scopes );
 
     if ( $res ) {
         if ( ! $server->login_resource_owner( ) ) {
@@ -96,7 +97,7 @@ sub _authorization_request {
             return;
         } else {
             $dsl->debug( "OAuth2::Server: Resource owner is logged in" );
-            $res = $server->confirm_by_resource_owner( $c_id, \@scopes );
+            $res = $server->confirm_by_resource_owner($dsl, $settings, $c_id, \@scopes );
             if ( ! defined $res ) {
                 $dsl->debug( "OAuth2::Server: Resource owner to confirm scopes" );
                 # call to $resource_owner_confirms method should have called redirect_to
@@ -113,9 +114,9 @@ sub _authorization_request {
         $dsl->debug( "OAuth2::Server: Generating auth code for $c_id" );
         my $expires_in = $settings->{auth_code_ttl} // 600;
 
-        my $auth_code = $server->generate_token( $expires_in, $c_id, \@scopes, 'auth', $url );
+        my $auth_code = $server->generate_token($dsl, $settings, $expires_in, $c_id, \@scopes, 'auth', $url );
 
-        $server->store_auth_code( $auth_code,$c_id,$expires_in,$url,@scopes );
+        $server->store_auth_code($dsl, $settings, $auth_code,$c_id,$expires_in,$url,@scopes );
 
         $uri->query_param_append( code  => $auth_code );
 
@@ -133,10 +134,13 @@ sub _authorization_request {
 }
 
 sub _access_token_request {
-    my ($dsl, $settings, $server) = @_;
+    my ($dsl, $settings) = @_;
     my ( $client_id,$client_secret,$grant_type,$auth_code,$url,$refresh_token )
         = map { $dsl->param( $_ ) // undef }
         qw/ client_id client_secret grant_type code redirect_uri refresh_token /;
+
+    my $server = get_server_class( $settings );
+
     if (
         ! defined( $grant_type )
             or ( $grant_type ne 'authorization_code' and $grant_type ne 'refresh_token' )
@@ -168,7 +172,7 @@ sub _access_token_request {
         $old_refresh_token = $refresh_token;
     } else {
         ( $client,$error,$scope,$user_id ) = $server->verify_auth_code(
-            $client_id,$client_secret,$auth_code,$url
+            $dsl, $settings, $client_id,$client_secret,$auth_code,$url
         );
     }
 
@@ -177,10 +181,11 @@ sub _access_token_request {
         $dsl->debug( "OAuth2::Server: Generating access token for $client" );
 
         my $expires_in    = $settings->{access_token_ttl} // 3600;
-        my $access_token  = $server->generate_token( $expires_in,$client,$scope,'access',undef,$user_id );
-        my $refresh_token = $server->generate_token( undef,$client,$scope,'refresh',undef,$user_id );
+        my $access_token  = $server->generate_token($dsl, $settings, $expires_in,$client,$scope,'access',undef,$user_id );
+        my $refresh_token = $server->generate_token($dsl, $settings, undef,$client,$scope,'refresh',undef,$user_id );
 
         $server->store_access_token(
+            $dsl, $settings,
             $client,$auth_code,$access_token,$refresh_token,
             $expires_in,$scope,$old_refresh_token
         );
@@ -233,7 +238,7 @@ sub _verify_access_token_and_scope {
         $access_token = $refresh_token;
     }
 
-    return $server->verify_access_token( $access_token,\@scopes,$refresh_token );
+    return $server->verify_access_token($dsl, $settings, $access_token,\@scopes,$refresh_token );
 }
 
 register_plugin;

@@ -1,6 +1,8 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+        - Breaking change here :( , with the dsl as an attribute of the server class, access to session was not working
+          dsl and settings are now passed to every function instead of begin an attribute
 
 0.04  2015-12-12 21:22:29 SGT
         - Share the access token in "var" when Bearer access token is correct
