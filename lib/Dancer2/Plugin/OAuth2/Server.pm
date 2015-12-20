@@ -91,7 +91,7 @@ sub _authorization_request {
     my ( $res,$error ) = $server->verify_client($dsl, $settings, $c_id, \@scopes );
 
     if ( $res ) {
-        if ( ! $server->login_resource_owner( ) ) {
+        if ( ! $server->login_resource_owner( $dsl, $settings ) ) {
             $dsl->debug( "OAuth2::Server: Resource owner not logged in" );
             # call to $resource_owner_logged_in method should have called redirect_to
             return;

@@ -1,6 +1,7 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+        - Bug fix, function to check is user is logged did not get access to dsl
 
 0.05  2015-12-18 22:45:17 CET
         - Breaking change here :( , with the dsl as an attribute of the server class, access to session was not working
