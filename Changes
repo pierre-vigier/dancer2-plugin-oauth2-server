@@ -2,6 +2,10 @@ Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
 
+0.07  2016-01-02 23:58:47 CET
+        - Add state_required configuration option:
+        Make the state parameter requried to get an authorization code
+
 0.06  2015-12-20 08:28:08 CET
         - Bug fix, function to check is user is logged did not get access to dsl
 
