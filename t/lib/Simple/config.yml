@@ -1,4 +1,4 @@
-#logger: null
+logger: Null
 plugins:
   "OAuth2::Server":
     clients:

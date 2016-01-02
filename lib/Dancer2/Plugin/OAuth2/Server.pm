@@ -84,7 +84,22 @@ sub _authorization_request {
                 error_uri         => '',
             }
         );
-        return;
+    }
+
+    my $state_required = $settings->{state_required} // 0;
+    if(
+        $state_required
+            and ! defined $state
+            and ! length $state
+    ) {
+        $dsl->status( 400 );
+        return $dsl->to_json(
+            {
+                error             => 'invalid_request',
+                error_description => 'the request was missing : state ',
+                error_uri         => '',
+            }
+        );
     }
 
     my $uri = URI->new( $url );
@@ -264,6 +279,14 @@ Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-o
 =head1 DESCRIPTION
 
 Dancer2::Plugin::OAuth2::Server is a port of Mojolicious plugin for OAuth2 server
+
+=head1 CONFIGURATION
+
+=head2 state_required
+
+State is optional in the sepcifications, however using state is really recommended to have a safe implementation on client side.
+Client should send state and verify it, switching state_required to 1 make state a required parameter when trying to get 
+the authorization code
 
 =head1 AUTHOR
 
