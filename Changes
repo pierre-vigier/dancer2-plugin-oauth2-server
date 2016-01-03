@@ -2,6 +2,10 @@ Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
 
+0.08  2016-01-03 23:27:52 CET
+        - Add missing compulsory methods to the Role Dancer2::Plugin::OAuth2::Server::Role
+        - Update documentation
+
 0.07  2016-01-02 23:58:47 CET
         - Add state_required configuration option:
         Make the state parameter requried to get an authorization code
