@@ -465,7 +465,7 @@ Pierre Vigier E<lt>pierre.vigier@gmail.comE<gt>
 
 =head1 COPYRIGHT
 
-Copyright 2015- Pierre Vigier
+Copyright 2016- Pierre Vigier
 
 =head1 LICENSE
 

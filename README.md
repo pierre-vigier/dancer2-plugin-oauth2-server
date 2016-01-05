@@ -202,7 +202,7 @@ Pierre Vigier &lt;pierre.vigier@gmail.com>
 
 # COPYRIGHT
 
-Copyright 2015- Pierre Vigier
+Copyright 2016- Pierre Vigier
 
 # LICENSE
 
