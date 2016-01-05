@@ -40,7 +40,7 @@ on_plugin_import {
 };
 
 register 'oauth_scopes' => sub {
-    my ($dsl, $scopes, $code_ref) = plugin_args(@_);
+    my ($dsl, $scopes, $code_ref) = @_;
 
     my $settings = plugin_setting;
 
@@ -53,7 +53,7 @@ register 'oauth_scopes' => sub {
             $dsl->status( 400 );
             return $dsl->to_json( { error => $res[1] } );
         } else {
-            $dsl->var( oauth_access_token => $res[0] );
+            $dsl->app->request->var( oauth_access_token => $res[0] );
             goto $code_ref;
         }
     }
