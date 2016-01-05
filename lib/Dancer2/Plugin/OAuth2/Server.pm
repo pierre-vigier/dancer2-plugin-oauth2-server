@@ -103,7 +103,7 @@ sub _authorization_request {
     }
 
     my $uri = URI->new( $url );
-    my ( $res,$error ) = $server->verify_client($dsl, $settings, $c_id, \@scopes );
+    my ( $res,$error ) = $server->verify_client($dsl, $settings, $c_id, \@scopes, $url );
 
     if ( $res ) {
         if ( ! $server->login_resource_owner( $dsl, $settings ) ) {
@@ -265,7 +265,8 @@ __END__
 
 =head1 NAME
 
-Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization Server / Resource Server with Dancer2
+Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization
+Server / Resource Server with Dancer2
 Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-oauth2-server
 
 =head1 SYNOPSIS
@@ -341,10 +342,14 @@ list of clients for the simple default implementation
         scopes:
           identity: 1
           other: 1
+        redirect_uri:
+          - url1
+          - url2
 
 Note the clients config is not required if you add the verify_client callback,
 but is necessary for running the plugin in its simplest form (when no server class
-is provided)
+is provided). In order to whitelist redirect_uri, provide an entry in the client
+if no entry is present, all uri are accepted
 
 =head2 state_required
 
@@ -385,10 +390,14 @@ Reference: L<http://tools.ietf.org/html/rfc6749#section-4.1.1>
 Function to verify if the client asking for an authorization code is known
 to the Resource Server and allowed to get an authorization code for the passed
 scopes.
-The function receives the client id, and an array reference of request scopes.
-The callback should return a list with two elements. The first element is either
-1 or 0 to say that the client is allowed or disallowed, the second element
+The function receives the client id, and an array reference of request scopes, and
+the redirect url. The callback should return a list with two elements. The first
+element is either 1 or 0 to say that the client is allowed or disallowed, the second element
 should be the error message in the case of the client being disallowed.
+Note: Even if the redirect url is optional, there can be some security concern if
+someone redirects to a compromised server. Because of that, some OAuth2 provider
+requried to whitelist the redirect uri by client. To allow client to verify url,
+it's passed as last argument to method verifiy_client
 
 =head2 store_auth_code
 

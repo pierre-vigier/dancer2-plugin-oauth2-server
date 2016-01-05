@@ -27,7 +27,7 @@ sub confirm_by_resource_owner {
 }
 
 sub verify_client {
-    my ($self, $dsl, $settings, $client_id, $scopes) = @_;
+    my ($self, $dsl, $settings, $client_id, $scopes, $uri) = @_;
 
     if ( my $client = $self->_get_clients($dsl, $settings)->{$client_id} ) {
 
@@ -39,6 +39,16 @@ sub verify_client {
             } elsif ( ! $self->_get_clients($dsl, $settings)->{$client_id}{scopes}{$scope} ) {
                 $dsl->debug( "OAuth2::Server: Client cannot scope ($scope)" );
                 return ( 0,'access_denied' );
+            }
+        }
+
+        if ( exists( $self->_get_clients($dsl, $settings)->{$client_id}{redirect_uri} ) ) {
+            my $whitelisted_uris = $self->_get_clients($dsl, $settings)->{$client_id}{redirect_uri};
+            if( ! grep { $_ eq $uri } @$whitelisted_uris ) {
+                $dsl->debug( "OAuth2::Server: Client does not accept uri ($uri)" );
+                return ( 0,'unauthorized_uri' );
+            } else {
+                $dsl->debug( "OAuth2::Server: Client accept uri ($uri)" );
             }
         }
 

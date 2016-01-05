@@ -1,6 +1,7 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+        - Allow to whitelist redirect uri, by providing the redirect_uri to the verify_client method
 
 0.09  2016-01-05 14:39:47 CET
         - Minimal changes to remove deprecation warnings for new Plugin code. Thanks Peter Mottram

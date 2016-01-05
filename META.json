@@ -69,7 +69,7 @@
          "web" : "https://github.com/pierre-vigier/dancer2-plugin-oauth2-server"
       }
    },
-   "version" : "0.09",
+   "version" : "0.10",
    "x_contributors" : [
       "Peter Mottram <peter@sysnix.com>"
    ]
