@@ -1,6 +1,8 @@
 Revision history for Dancer2-Plugin-OAuth2-Server
 
 {{$NEXT}}
+
+0.10  2016-01-05 16:45:26 CET
         - Allow to whitelist redirect uri, by providing the redirect_uri to the verify_client method
 
 0.09  2016-01-05 14:39:47 CET
