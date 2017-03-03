@@ -267,7 +267,7 @@ __END__
 
 Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization
 Server / Resource Server with Dancer2
-Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-oauth2-server
+Port of Mojolicious implementation : https://github.com/Humanstate/mojolicious-plugin-oauth2-server
 
 =head1 SYNOPSIS
 
