@@ -14,4 +14,5 @@ on test => sub {
     requires 'HTTP::Request';
     requires 'Plack::Test';
     requires 'YAML::XS';
+    requires 'JSON';
 };
