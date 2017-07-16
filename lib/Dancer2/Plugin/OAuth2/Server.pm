@@ -108,16 +108,16 @@ sub _authorization_request {
     }
 
     my $uri = URI->new( $url );
-    my ( $res,$error ) = $server->verify_client($plugin, $settings, $c_id, \@scopes, $url );
+    my ( $res,$error ) = $server->verify_client($plugin, $c_id, \@scopes, $url );
 
     if ( $res ) {
-        if ( ! $server->login_resource_owner( $plugin, $settings ) ) {
+        if ( ! $server->login_resource_owner( $plugin ) ) {
             $plugin->app->log( debug => "OAuth2::Server: Resource owner not logged in" );
             # call to $resource_owner_logged_in method should have called redirect_to
             return;
         } else {
             $plugin->app->log( debug =>  "OAuth2::Server: Resource owner is logged in" );
-            $res = $server->confirm_by_resource_owner($plugin, $settings, $c_id, \@scopes );
+            $res = $server->confirm_by_resource_owner($plugin, $c_id, \@scopes );
             if ( ! defined $res ) {
                 $plugin->app->log( debug =>  "OAuth2::Server: Resource owner to confirm scopes" );
                 # call to $resource_owner_confirms method should have called redirect_to
@@ -134,9 +134,9 @@ sub _authorization_request {
         $plugin->app->log( debug =>  "OAuth2::Server: Generating auth code for $c_id" );
         my $expires_in = $settings->{auth_code_ttl} // 600;
 
-        my $auth_code = $server->generate_token($plugin, $settings, $expires_in, $c_id, \@scopes, 'auth', $url );
+        my $auth_code = $server->generate_token($plugin, $expires_in, $c_id, \@scopes, 'auth', $url );
 
-        $server->store_auth_code($plugin, $settings, $auth_code,$c_id,$expires_in,$url,@scopes );
+        $server->store_auth_code($plugin, $auth_code,$c_id,$expires_in,$url,@scopes );
 
         $uri->query_param_append( code  => $auth_code );
 
@@ -193,7 +193,7 @@ sub _access_token_request {
         $old_refresh_token = $refresh_token;
     } else {
         ( $client,$error,$scope,$user_id ) = $server->verify_auth_code(
-            $plugin, $settings, $client_id,$client_secret,$auth_code,$url
+            $plugin, $client_id,$client_secret,$auth_code,$url
         );
     }
 
@@ -202,11 +202,11 @@ sub _access_token_request {
         $plugin->app->log( debug =>  "OAuth2::Server: Generating access token for $client" );
 
         my $expires_in    = $settings->{access_token_ttl} // 3600;
-        my $access_token  = $server->generate_token($plugin, $settings, $expires_in,$client,$scope,'access',undef,$user_id );
-        my $refresh_token = $server->generate_token($plugin, $settings, undef,$client,$scope,'refresh',undef,$user_id );
+        my $access_token  = $server->generate_token($plugin, $expires_in,$client,$scope,'access',undef,$user_id );
+        my $refresh_token = $server->generate_token($plugin, undef,$client,$scope,'refresh',undef,$user_id );
 
         $server->store_access_token(
-            $plugin, $settings,
+            $plugin,
             $client,$auth_code,$access_token,$refresh_token,
             $expires_in,$scope,$old_refresh_token
         );
@@ -260,7 +260,7 @@ sub _verify_access_token_and_scope {
         $access_token = $refresh_token;
     }
 
-    return $server->verify_access_token($plugin, $settings, $access_token,\@scopes,$refresh_token );
+    return $server->verify_access_token($plugin, $access_token,\@scopes,$refresh_token );
 }
 
 plugin_keywords 'oauth_scopes';
@@ -284,6 +284,13 @@ Port of Mojolicious implementation : https://github.com/Humanstate/mojolicious-p
   To protect a route, declare it like following:
 
   get '/protected' => oauth_scopes 'desired_scope' => sub { ... }
+
+=head1 BREAKING CHANGES
+
+The old version 0.10 and before are paasing the dsl and settings of the plugin as the 2 first arguments of
+the delegate function to Server class. With the new version of Dancer2::Plugin, the dsl is not available
+anymore within a plugin. Instead, the delegated functions will now receive the "plugin" instance, and from there
+can access the app, to access paramters for instance.
 
 =head1 DESCRIPTION
 
@@ -375,7 +382,7 @@ Defaults to Dancer2::Plugin::OAuth2::Server::Simple, the provided simple impleme
 To customize the implementation in a more realistic way, the user needs to create a class implementing
 the role Dancer2::Plugin::OAuth2::Server::Role , and provide the Class name in the configuration key
 server_class. That role ensures that all the required functions are implemented.
-All the function will receive the dsl and settings as first 2 parameters: $dsl, $settings
+All the function will receive the pluign instance as first parameter: $plugin
 Those parameters will for instance allows user to access session, are plugin configuration
 
 =head2 login_resource_owner
@@ -417,7 +424,7 @@ the verify_auth_code function for verification
 
 =head2 generate_token
 
-Function to generate a token. After the 2 common parameters, dsl and settings,
+Function to generate a token. After the first parameter, plugin,
 that function receives the validity period in seconds, the client id, the list of scopes,
 the type of token and the redirect url.
 That function should return the token that it generates, and should be unique.
@@ -427,7 +434,7 @@ That function should return the token that it generates, and should be unique.
 Reference: L<http://tools.ietf.org/html/rfc6749#section-4.1.3>
 
 Function to verify the authorization code passed from the Client to the
-Authorization Server. The function is passed the dsl, the settings, and then
+Authorization Server. The function is passed the plugin, and then
 the client_id, the client_secret, the authorization code, and the redirect uri.
 The Function should verify the authorization code using the rules defined in
 the reference RFC above, and return a list with 4 elements. The first element
@@ -441,7 +448,7 @@ be a user identifier
 =head2 store_access_token
 
 Function to allow you to store the generated access and refresh tokens. The
-function is passed the dsl, the settings, and then the client identifier as
+function is passed the plugin, and then the client identifier as
 returned from the verify_auth_code callback, the authorization code, the access
 token, the refresh_token, the validity period in seconds, the scope returned
 from the verify_auth_code callback, and the old refresh token,
@@ -460,9 +467,9 @@ the verify_access_token callback for verification
 
 Reference: L<http://tools.ietf.org/html/rfc6749#section-7>
 
-Function to verify the access token. The function is passed the dsl, the
-settings and then the access token, an optional reference to a list of the
-scopes and if the access_token is actually a refresh token. Note that the access
+Function to verify the access token. The function is passed the plugin and
+then the access token, an optional reference to a list of the scopes and
+if the access_token is actually a refresh token. Note that the access
 token could be the refresh token, as this method is also called when the Client
 uses the refresh token to get a new access token (in which case the value of the
 $is_refresh_token variable will be true).
