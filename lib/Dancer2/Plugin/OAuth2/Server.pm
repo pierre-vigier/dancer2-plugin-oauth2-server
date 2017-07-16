@@ -10,8 +10,30 @@ use URI::QueryParam;
 use Class::Load qw(try_load_class);
 use Carp;
 
-sub get_server_class {
-    my ($settings) = @_;
+has server_class => ( is => 'lazy' );
+
+sub BUILD {
+    my $plugin = shift;
+    my $settings = $plugin->config;
+    my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
+    my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
+
+    $plugin->app->add_route(
+        method  => 'get',
+        regexp  => $authorization_route,
+        code    => sub { $plugin->_authorization_request() }
+    );
+
+    $plugin->app->add_route(
+        method  => 'post',
+        regexp  => $access_token_route,
+        code    => sub { $plugin->_access_token_request() }
+    );
+}
+
+sub _build_server_class {
+    my ($plugin) = shift;
+    my $settings = $plugin->config;
     my $server_class = $settings->{server_class}//"Dancer2::Plugin::OAuth2::Server::Simple";
     my ($ok, $error) = try_load_class($server_class);
     if (! $ok) {
@@ -21,51 +43,33 @@ sub get_server_class {
     return $server_class->new();
 }
 
-on_plugin_import {
-    my $dsl      = shift;
-    my $settings = plugin_setting;
-    my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
-    my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
+sub oauth_scopes {
+    my ($plugin, $scopes, $code_ref) = @_;
 
-    $dsl->app->add_route(
-        method  => 'get',
-        regexp  => $authorization_route,
-        code    => sub { _authorization_request( $dsl, $settings ) }
-    );
-    $dsl->app->add_route(
-        method  => 'post',
-        regexp  => $access_token_route,
-        code    => sub { _access_token_request( $dsl, $settings ) }
-    );
-};
-
-register 'oauth_scopes' => sub {
-    my ($dsl, $scopes, $code_ref) = @_;
-
-    my $settings = plugin_setting;
+    my $settings = $plugin->config;
 
     $scopes = [$scopes] unless ref $scopes eq 'ARRAY';
 
     return sub {
-        my $server = get_server_class( $settings );
-        my @res = _verify_access_token_and_scope( $dsl, $settings, $server,0, @$scopes );
+        my $server = $plugin->server_class;
+        my @res = $plugin->_verify_access_token_and_scope( $server,0, @$scopes );
         if( not $res[0] ) {
-            $dsl->status( 400 );
-            return $dsl->to_json( { error => $res[1] } );
+            return $plugin->app->send_error( to_json( { error => $res[1] } ), 400 );
         } else {
-            $dsl->app->request->var( oauth_access_token => $res[0] );
+            $plugin->app->request->var( oauth_access_token => $res[0] );
             goto $code_ref;
         }
     }
 };
 
 sub _authorization_request {
-    my ($dsl, $settings) = @_;
+    my ($plugin) = @_;
+    my $settings = $plugin->config;
     my ( $c_id,$url,$type,$scope,$state )
-        = map { $dsl->param( $_ ) // undef }
+        = map { $plugin->app->request->param( $_ ) // undef }
         qw/ client_id redirect_uri response_type scope state /;
 
-    my $server = get_server_class( $settings );
+    my $server = $plugin->server_class;
 
     my @scopes = $scope ? split( / /,$scope ) : ();
 
@@ -74,8 +78,9 @@ sub _authorization_request {
             or ! defined( $type )
             or $type ne 'code'
     ) {
-        $dsl->status( 400 );
-        return $dsl->to_json(
+        $plugin->app->response->status( 400 );
+        use JSON;
+        return to_json(
             {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: client_id, '
@@ -92,46 +97,45 @@ sub _authorization_request {
             and ! defined $state
             and ! length $state
     ) {
-        $dsl->status( 400 );
-        return $dsl->to_json(
-            {
+        $plugin->app->send_error(
+            to_json( {
                 error             => 'invalid_request',
                 error_description => 'the request was missing : state ',
                 error_uri         => '',
-            }
+            }), 400
         );
     }
 
     my $uri = URI->new( $url );
-    my ( $res,$error ) = $server->verify_client($dsl, $settings, $c_id, \@scopes, $url );
+    my ( $res,$error ) = $server->verify_client($plugin, $settings, $c_id, \@scopes, $url );
 
     if ( $res ) {
-        if ( ! $server->login_resource_owner( $dsl, $settings ) ) {
-            $dsl->debug( "OAuth2::Server: Resource owner not logged in" );
+        if ( ! $server->login_resource_owner( $plugin, $settings ) ) {
+            $plugin->app->log( debug => "OAuth2::Server: Resource owner not logged in" );
             # call to $resource_owner_logged_in method should have called redirect_to
             return;
         } else {
-            $dsl->debug( "OAuth2::Server: Resource owner is logged in" );
-            $res = $server->confirm_by_resource_owner($dsl, $settings, $c_id, \@scopes );
+            $plugin->app->log( debug =>  "OAuth2::Server: Resource owner is logged in" );
+            $res = $server->confirm_by_resource_owner($plugin, $settings, $c_id, \@scopes );
             if ( ! defined $res ) {
-                $dsl->debug( "OAuth2::Server: Resource owner to confirm scopes" );
+                $plugin->app->log( debug =>  "OAuth2::Server: Resource owner to confirm scopes" );
                 # call to $resource_owner_confirms method should have called redirect_to
                 return;
             }
             elsif ( $res == 0 ) {
-                $dsl->debug( "OAuth2::Server: Resource owner denied scopes" );
+                $plugin->app->log( debug =>  "OAuth2::Server: Resource owner denied scopes" );
                 $error = 'access_denied';
             }
         }
     }
 
     if ( $res ) {
-        $dsl->debug( "OAuth2::Server: Generating auth code for $c_id" );
+        $plugin->app->log( debug =>  "OAuth2::Server: Generating auth code for $c_id" );
         my $expires_in = $settings->{auth_code_ttl} // 600;
 
-        my $auth_code = $server->generate_token($dsl, $settings, $expires_in, $c_id, \@scopes, 'auth', $url );
+        my $auth_code = $server->generate_token($plugin, $settings, $expires_in, $c_id, \@scopes, 'auth', $url );
 
-        $server->store_auth_code($dsl, $settings, $auth_code,$c_id,$expires_in,$url,@scopes );
+        $server->store_auth_code($plugin, $settings, $auth_code,$c_id,$expires_in,$url,@scopes );
 
         $uri->query_param_append( code  => $auth_code );
 
@@ -145,16 +149,17 @@ sub _authorization_request {
 
     $uri->query_param_append( state => $state ) if defined( $state );
 
-    $dsl->redirect( $uri );
+    $plugin->app->redirect( $uri );
 }
 
 sub _access_token_request {
-    my ($dsl, $settings) = @_;
+    my ($plugin) = @_;
+    my $settings = $plugin->config;
     my ( $client_id,$client_secret,$grant_type,$auth_code,$url,$refresh_token )
-        = map { $dsl->param( $_ ) // undef }
+        = map { $plugin->app->request->param( $_ ) // undef }
         qw/ client_id client_secret grant_type code redirect_uri refresh_token /;
 
-    my $server = get_server_class( $settings );
+    my $server = $plugin->server_class;
 
     if (
         ! defined( $grant_type )
@@ -162,16 +167,15 @@ sub _access_token_request {
             or ( $grant_type eq 'authorization_code' and ! defined( $auth_code ) )
             or ( $grant_type eq 'authorization_code' and ! defined( $url ) )
     ) {
-        $dsl->status( 400 );
-        return $dsl->to_json(
-            {
+        return $plugin->app->send_error(
+            to_json( {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: grant_type, '
                 . 'client_id, client_secret, code, redirect_uri;'
                 . 'or grant_type did not equal "authorization_code" '
                 . 'or "refresh_token"',
                 error_uri         => '',
-            }
+            }), 400
         );
         return;
     }
@@ -181,26 +185,26 @@ sub _access_token_request {
     my ( $client,$error,$scope,$old_refresh_token,$user_id );
 
     if ( $grant_type eq 'refresh_token' ) {
-        ( $client,$error,$scope,$user_id ) = _verify_access_token_and_scope(
-            $dsl, $settings, $server, $refresh_token
+        ( $client,$error,$scope,$user_id ) = $plugin->_verify_access_token_and_scope(
+            $server, $refresh_token
         );
         $old_refresh_token = $refresh_token;
     } else {
         ( $client,$error,$scope,$user_id ) = $server->verify_auth_code(
-            $dsl, $settings, $client_id,$client_secret,$auth_code,$url
+            $plugin, $settings, $client_id,$client_secret,$auth_code,$url
         );
     }
 
     if ( $client ) {
 
-        $dsl->debug( "OAuth2::Server: Generating access token for $client" );
+        $plugin->app->log( debug =>  "OAuth2::Server: Generating access token for $client" );
 
         my $expires_in    = $settings->{access_token_ttl} // 3600;
-        my $access_token  = $server->generate_token($dsl, $settings, $expires_in,$client,$scope,'access',undef,$user_id );
-        my $refresh_token = $server->generate_token($dsl, $settings, undef,$client,$scope,'refresh',undef,$user_id );
+        my $access_token  = $server->generate_token($plugin, $settings, $expires_in,$client,$scope,'access',undef,$user_id );
+        my $refresh_token = $server->generate_token($plugin, $settings, undef,$client,$scope,'refresh',undef,$user_id );
 
         $server->store_access_token(
-            $dsl, $settings,
+            $plugin, $settings,
             $client,$auth_code,$access_token,$refresh_token,
             $expires_in,$scope,$old_refresh_token
         );
@@ -223,40 +227,42 @@ sub _access_token_request {
         };
     }
 
-    $dsl->header( 'Cache-Control' => 'no-store' );
-    $dsl->header( 'Pragma'        => 'no-cache' );
+    $plugin->app->response->header( 'Cache-Control' => 'no-store' );
+    $plugin->app->response->header( 'Pragma'        => 'no-cache' );
 
-    $dsl->status( $status );
-    return $dsl->to_json( $json_response );
+    $plugin->app->response->status( $status );
+    return to_json( $json_response );
 }
 
 sub _verify_access_token_and_scope {
-    my ($dsl, $settings, $server, $refresh_token, @scopes) = @_;
+    my ($plugin, $server, $refresh_token, @scopes) = @_;
+    my $settings = $plugin->config;
 
     my $access_token;
 
     if ( ! $refresh_token ) {
-        if ( my $auth_header = $dsl->app->request->header( 'Authorization' ) ) {
+        if ( my $auth_header = $plugin->app->request->header( 'Authorization' ) ) {
             my ( $auth_type,$auth_access_token ) = split( / /,$auth_header );
 
             if ( $auth_type ne 'Bearer' ) {
-                $dsl->debug( "OAuth2::Server: Auth type is not 'Bearer'" );
+                $plugin->app->log( debug =>  "OAuth2::Server: Auth type is not 'Bearer'" );
                 return ( 0,'invalid_request' );
             } else {
                 $access_token = $auth_access_token;
             }
         } else {
-            $dsl->debug( "OAuth2::Server: Authorization header missing" );
+            $plugin->app->log( debug =>  "OAuth2::Server: Authorization header missing" );
             return ( 0,'invalid_request' );
         }
     } else {
         $access_token = $refresh_token;
     }
 
-    return $server->verify_access_token($dsl, $settings, $access_token,\@scopes,$refresh_token );
+    return $server->verify_access_token($plugin, $settings, $access_token,\@scopes,$refresh_token );
 }
 
-register_plugin;
+plugin_keywords 'oauth_scopes';
+#register_plugin;
 
 1;
 __END__

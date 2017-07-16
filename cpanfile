@@ -8,6 +8,7 @@ requires "URI::QueryParam";
 requires "Class::Load";
 requires "Carp";
 requires "MIME::Base64";
+requires "Net::OAuth2::AuthorizationServer";
 
 on test => sub {
     requires 'Test::More', '0.96';

@@ -9,58 +9,58 @@ with 'Dancer2::Plugin::OAuth2::Server::Role';
 use feature qw/state/;
 
 sub _get_clients  {
-    my ($self, $dsl, $settings) = @_;
+    my ($self, $plugin, $settings) = @_;
 
     return $settings->{clients} // {};
 }
 
 sub login_resource_owner {
-    my ($self, $dsl, $settings) = @_;
+    my ($self, $plugin, $settings) = @_;
 
     return 1;
 }
 
 sub confirm_by_resource_owner {
-    my ($self, $dsl, $settings, $client_id, $scopes) = @_;
+    my ($self, $plugin, $settings, $client_id, $scopes) = @_;
 
     return 1;
 }
 
 sub verify_client {
-    my ($self, $dsl, $settings, $client_id, $scopes, $uri) = @_;
+    my ($self, $plugin, $settings, $client_id, $scopes, $uri) = @_;
 
-    if ( my $client = $self->_get_clients($dsl, $settings)->{$client_id} ) {
+    if ( my $client = $self->_get_clients($plugin, $settings)->{$client_id} ) {
 
         foreach my $scope ( @{ $scopes // [] } ) {
 
-            if ( ! exists( $self->_get_clients($dsl, $settings)->{$client_id}{scopes}{$scope} ) ) {
-                $dsl->debug( "OAuth2::Server: Client lacks scope ($scope)" );
+            if ( ! exists( $self->_get_clients($plugin, $settings)->{$client_id}{scopes}{$scope} ) ) {
+                $plugin->app->log( debug =>  "OAuth2::Server: Client lacks scope ($scope)" );
                 return ( 0,'invalid_scope' );
-            } elsif ( ! $self->_get_clients($dsl, $settings)->{$client_id}{scopes}{$scope} ) {
-                $dsl->debug( "OAuth2::Server: Client cannot scope ($scope)" );
+            } elsif ( ! $self->_get_clients($plugin, $settings)->{$client_id}{scopes}{$scope} ) {
+                $plugin->app->log( debug =>  "OAuth2::Server: Client cannot scope ($scope)" );
                 return ( 0,'access_denied' );
             }
         }
 
-        if ( exists( $self->_get_clients($dsl, $settings)->{$client_id}{redirect_uri} ) ) {
-            my $whitelisted_uris = $self->_get_clients($dsl, $settings)->{$client_id}{redirect_uri};
+        if ( exists( $self->_get_clients($plugin, $settings)->{$client_id}{redirect_uri} ) ) {
+            my $whitelisted_uris = $self->_get_clients($plugin, $settings)->{$client_id}{redirect_uri};
             if( ! grep { $_ eq $uri } @$whitelisted_uris ) {
-                $dsl->debug( "OAuth2::Server: Client does not accept uri ($uri)" );
+                $plugin->app->log( debug =>  "OAuth2::Server: Client does not accept uri ($uri)" );
                 return ( 0,'unauthorized_uri' );
             } else {
-                $dsl->debug( "OAuth2::Server: Client accept uri ($uri)" );
+                $plugin->app->log( debug =>  "OAuth2::Server: Client accept uri ($uri)" );
             }
         }
 
         return ( 1 );
     }
 
-    $dsl->debug( "OAuth2::Server: Client ($client_id) does not exist" );
+    $plugin->app->log( debug =>  "OAuth2::Server: Client ($client_id) does not exist" );
     return ( 0,'unauthorized_client' );
 }
 
 sub generate_token {
-    my ( $self, $dsl, $settings, $ttl,$client_id,$scopes,$type,$redirect_url,$user_id ) = @_;
+    my ( $self, $plugin, $settings, $ttl,$client_id,$scopes,$type,$redirect_url,$user_id ) = @_;
 
     my $code;
 
@@ -94,7 +94,7 @@ sub generate_token {
 
 state %AUTH_CODES;
 sub store_auth_code {
-    my ( $self, $dsl, $settings, $auth_code,$client_id,$expires_in,$uri,@scopes ) = @_;
+    my ( $self, $plugin, $settings, $auth_code,$client_id,$expires_in,$uri,@scopes ) = @_;
     #return if $JWT_SECRET;
 
     $AUTH_CODES{$auth_code} = {
@@ -110,7 +110,7 @@ sub store_auth_code {
 state %REFRESH_TOKENS;
 state %ACCESS_TOKENS;
 sub verify_access_token {
-    my ( $self, $dsl, $settings, $access_token,$scopes_ref,$is_refresh_token ) = @_;
+    my ( $self, $plugin, $settings, $access_token,$scopes_ref,$is_refresh_token ) = @_;
 
     #return _verify_access_token_jwt( @_ ) if $JWT_SECRET;
 
@@ -125,7 +125,7 @@ sub verify_access_token {
                     ! exists( $REFRESH_TOKENS{$access_token}{scope}{$scope} )
                         or ! $REFRESH_TOKENS{$access_token}{scope}{$scope}
                 ) {
-                    $dsl->debug( "OAuth2::Server: Refresh token does not have scope ($scope)" );
+                    $plugin->app->log( debug =>  "OAuth2::Server: Refresh token does not have scope ($scope)" );
                     return ( 0,'invalid_grant' )
                 }
             }
@@ -136,8 +136,8 @@ sub verify_access_token {
     elsif ( exists( $ACCESS_TOKENS{$access_token} ) ) {
 
         if ( $ACCESS_TOKENS{$access_token}{expires} <= time ) {
-            $dsl->debug( "OAuth2::Server: Access token has expired" );
-            $self->revoke_access_token( $dsl, $settings, $access_token );
+            $plugin->app->log( debug =>  "OAuth2::Server: Access token has expired" );
+            $self->revoke_access_token( $plugin, $settings, $access_token );
             return ( 0,'invalid_grant' )
         } elsif ( $scopes_ref ) {
 
@@ -146,67 +146,67 @@ sub verify_access_token {
                     ! exists( $ACCESS_TOKENS{$access_token}{scope}{$scope} )
                         or ! $ACCESS_TOKENS{$access_token}{scope}{$scope}
                 ) {
-                    $dsl->debug( "OAuth2::Server: Access token does not have scope ($scope)" );
+                    $plugin->app->log( debug =>  "OAuth2::Server: Access token does not have scope ($scope)" );
                     return ( 0,'invalid_grant' )
                 }
             }
 
         }
 
-        $dsl->debug( "OAuth2::Server: Access token is valid" );
+        $plugin->app->log( debug =>  "OAuth2::Server: Access token is valid" );
         return $ACCESS_TOKENS{$access_token}{client_id};
     }
 
-    $dsl->debug( "OAuth2::Server: Access token does not exist" );
+    $plugin->app->log( debug =>  "OAuth2::Server: Access token does not exist" );
     return ( 0,'invalid_grant' )
 }
 
 sub revoke_access_token {
-    my ( $self, $dsl, $settings, $access_token ) = @_;
+    my ( $self, $plugin, $settings, $access_token ) = @_;
     delete( $ACCESS_TOKENS{$access_token} );
 }
 
 sub verify_auth_code {
-    my ($self, $dsl, $settings, $client_id,$client_secret,$auth_code,$uri ) = @_;
+    my ($self, $plugin, $settings, $client_id,$client_secret,$auth_code,$uri ) = @_;
     #return _verify_auth_code_jwt( @_ ) if $JWT_SECRET;
 
     my ( $sec,$usec,$rand ) = split( '-',decode_base64( $auth_code ) );
 
     if (
         ! exists( $AUTH_CODES{$auth_code} )
-            or ! exists( $self->_get_clients($dsl, $settings)->{$client_id} )
-            or ( $client_secret ne $self->_get_clients($dsl, $settings)->{$client_id}{client_secret} )
+            or ! exists( $self->_get_clients($plugin, $settings)->{$client_id} )
+            or ( $client_secret ne $self->_get_clients($plugin, $settings)->{$client_id}{client_secret} )
             or $AUTH_CODES{$auth_code}{access_token}
             or ( $uri && $AUTH_CODES{$auth_code}{redirect_uri} ne $uri )
             or ( $AUTH_CODES{$auth_code}{expires} <= time )
     ) {
 
-        $dsl->debug( "OAuth2::Server: Auth code does not exist" )
+        $plugin->app->log( debug =>  "OAuth2::Server: Auth code does not exist" )
             if ! exists( $AUTH_CODES{$auth_code} );
-        $dsl->debug( "OAuth2::Server: Client ($client_id) does not exist" )
-            if ! exists( $self->_get_clients($dsl, $settings)->{$client_id} );
-        $dsl->debug( "OAuth2::Server: Client secret does not match" )
+        $plugin->app->log( debug =>  "OAuth2::Server: Client ($client_id) does not exist" )
+            if ! exists( $self->_get_clients($plugin, $settings)->{$client_id} );
+        $plugin->app->log( debug =>  "OAuth2::Server: Client secret does not match" )
             if (
                 ! $client_secret
-                    or ! $self->_get_clients($dsl, $settings)->{$client_id}
-                    or $client_secret ne $self->_get_clients($dsl, $settings)->{$client_id}{client_secret}
+                    or ! $self->_get_clients($plugin, $settings)->{$client_id}
+                    or $client_secret ne $self->_get_clients($plugin, $settings)->{$client_id}{client_secret}
             );
 
         if ( $AUTH_CODES{$auth_code} ) {
-            $dsl->debug( "OAuth2::Server: Redirect URI does not match" )
+            $plugin->app->log( debug =>  "OAuth2::Server: Redirect URI does not match" )
                 if ( $uri && $AUTH_CODES{$auth_code}{redirect_uri} ne $uri );
-            $dsl->debug( "OAuth2::Server: Auth code expired" )
+            $plugin->app->log( debug =>  "OAuth2::Server: Auth code expired" )
                 if ( $AUTH_CODES{$auth_code}{expires} <= time );
         }
 
         if ( my $access_token = $AUTH_CODES{$auth_code}{access_token} ) {
             # this auth code has already been used to generate an access token
             # so we need to revoke the access token that was previously generated
-            $dsl->debug(
+            $plugin->app->log( debug => 
                 "OAuth2::Server: Auth code already used to get access token"
             );
 
-            $self->revoke_access_token($dsl, $settings, $access_token );
+            $self->revoke_access_token($plugin, $settings, $access_token );
         }
 
         return ( 0,'invalid_grant' );
@@ -218,7 +218,7 @@ sub verify_auth_code {
 
 sub store_access_token {
     my (
-        $self, $dsl, $settings, $c_id,$auth_code,$access_token,$refresh_token,
+        $self, $plugin, $settings, $c_id,$auth_code,$access_token,$refresh_token,
         $expires_in,$scope,$old_refresh_token
     ) = @_;
     #return if $JWT_SECRET;
@@ -236,8 +236,8 @@ sub store_access_token {
         # no longer exist at the point that the refresh token is used
         $scope //= $REFRESH_TOKENS{$old_refresh_token}{scope};
 
-        $dsl->debug( "OAuth2::Server: Revoking old access token (refresh)" );
-        $self->revoke_access_token($dsl, $settings, $prev_access_token );
+        $plugin->app->log( debug =>  "OAuth2::Server: Revoking old access token (refresh)" );
+        $self->revoke_access_token($plugin, $settings, $prev_access_token );
     }
 
     delete( $REFRESH_TOKENS{$old_refresh_token} )
