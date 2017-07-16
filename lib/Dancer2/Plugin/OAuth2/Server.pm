@@ -54,7 +54,8 @@ sub oauth_scopes {
         my $server = $plugin->server_class;
         my @res = $plugin->_verify_access_token_and_scope( $server,0, @$scopes );
         if( not $res[0] ) {
-            return $plugin->app->send_error( to_json( { error => $res[1] } ), 400 );
+            $plugin->app->response->status(400);
+            return $plugin->app->send_as( JSON => { error => $res[1] } );
         } else {
             $plugin->app->request->var( oauth_access_token => $res[0] );
             goto $code_ref;
@@ -79,8 +80,7 @@ sub _authorization_request {
             or $type ne 'code'
     ) {
         $plugin->app->response->status( 400 );
-        use JSON;
-        return to_json(
+        return $plugin->app->send_as( JSON =>
             {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: client_id, '
@@ -97,12 +97,13 @@ sub _authorization_request {
             and ! defined $state
             and ! length $state
     ) {
-        $plugin->app->send_error(
-            to_json( {
+        $plugin->app->response->status( 400 );
+        return $plugin->app->send_as( JSON =>
+            {
                 error             => 'invalid_request',
                 error_description => 'the request was missing : state ',
                 error_uri         => '',
-            }), 400
+            }
         );
     }
 
@@ -167,15 +168,16 @@ sub _access_token_request {
             or ( $grant_type eq 'authorization_code' and ! defined( $auth_code ) )
             or ( $grant_type eq 'authorization_code' and ! defined( $url ) )
     ) {
-        return $plugin->app->send_error(
-            to_json( {
+        $plugin->app->response->status( 400 );
+        return $plugin->app->send_as( JSON =>
+            {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: grant_type, '
                 . 'client_id, client_secret, code, redirect_uri;'
                 . 'or grant_type did not equal "authorization_code" '
                 . 'or "refresh_token"',
                 error_uri         => '',
-            }), 400
+            }
         );
         return;
     }
@@ -231,7 +233,7 @@ sub _access_token_request {
     $plugin->app->response->header( 'Pragma'        => 'no-cache' );
 
     $plugin->app->response->status( $status );
-    return to_json( $json_response );
+    return $plugin->app->send_as( JSON =>  $json_response );
 }
 
 sub _verify_access_token_and_scope {
