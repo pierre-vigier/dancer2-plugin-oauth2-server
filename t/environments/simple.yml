@@ -1,4 +1,5 @@
-logger: Null
+#logger: Null
+logger: Console
 plugins:
   "OAuth2::Server":
     clients:
