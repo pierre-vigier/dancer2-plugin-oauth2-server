@@ -1,8 +1,7 @@
 use strict;
 use Test::More;
-use Dancer2::Plugin::OAuth2::Server;
 
 # replace with the actual test
-ok 1;
+use_ok('Dancer2::Plugin::OAuth2::Server');
 
 done_testing;

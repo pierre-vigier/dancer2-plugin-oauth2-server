@@ -5,8 +5,10 @@ plugins:
       client1:
         client_secret: secret
         scopes:
+          identity: 1
+          other: 0
+      client2:
+        client_secret: secret2
+        scopes:
+          identity: 1
           other: 1
-        redirect_uri:
-          - http://localhost/cb
-          - http://localhost/callback
-

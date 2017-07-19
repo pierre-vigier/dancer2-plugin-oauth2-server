@@ -1,5 +1,5 @@
-#logger: Null
-logger: Console
+logger: Null
+#logger: Console
 plugins:
   "OAuth2::Server":
     clients:
@@ -13,6 +13,3 @@ plugins:
         scopes:
           identity: 1
           other: 1
-    authorize_route: /authorize
-    access_token_route: /access_token
-

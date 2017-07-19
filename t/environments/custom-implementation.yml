@@ -1,0 +1,7 @@
+logger: Null
+#logger: Console
+plugins:
+  "OAuth2::Server":
+    server_class: 'Implementation'
+    debug: 0
+

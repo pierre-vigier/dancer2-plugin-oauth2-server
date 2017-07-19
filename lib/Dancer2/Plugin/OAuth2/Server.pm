@@ -13,6 +13,7 @@ use Net::OAuth2::AuthorizationServer;
 
 has server_class => ( is => 'lazy' );
 has grant => ( is => 'rw' );
+has debug => ( is => 'ro', from_config => 'debug', default => sub { 0 } );
 
 sub BUILD {
     my $plugin = shift;
@@ -20,18 +21,27 @@ sub BUILD {
     my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
     my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
 
-    if( $settings->{clients} ) {
+    if( $settings->{server_class} ) {
+        my $server = $plugin->server_class;
+        $plugin->grant(
+            Net::OAuth2::AuthorizationServer->new->auth_code_grant(
+                verify_client_cb             => sub { $server->verify_client( plugin => $plugin, @_ ); },
+                store_auth_code_cb           => sub { $server->store_auth_code( plugin => $plugin, @_ ); },
+                verify_auth_code_cb          => sub { $server->verify_auth_code( plugin => $plugin, @_ ); },
+                store_access_token_cb        => sub { $server->store_access_token( plugin => $plugin, @_ ); },
+                verify_access_token_cb       => sub { $server->verify_access_token( plugin => $plugin, @_ ); },
+                login_resource_owner_cb      => sub { $server->login_resource_owner( plugin => $plugin, @_ ); },
+                confirm_by_resource_owner_cb => sub { $server->confirm_by_resource_owner( plugin => $plugin, @_ ); },
+            )
+        );
+    } elsif( $settings->{clients} ) {
         $plugin->grant(
             Net::OAuth2::AuthorizationServer->new->auth_code_grant(
                 clients => $settings->{clients}
-                #( map { +"${_}_cb" => $config->{$_} } qw/
-                #verify_client store_auth_code verify_auth_code
-                #store_access_token verify_access_token
-                #login_resource_owner confirm_by_resource_owner
-                #/ )
             )
         );
     } else {
+        die 'Provide either an implementation class or a clients setting';
     }
 
     $plugin->app->add_route(
@@ -59,6 +69,13 @@ sub _build_server_class {
     return $server_class->new();
 }
 
+sub _debug {
+    my ($plugin, $msg) = @_;
+    return unless $plugin->debug;
+
+    $plugin->app->log( debug => $msg );
+}
+
 sub oauth_scopes {
     my ($plugin, $scopes, $code_ref) = @_;
 
@@ -66,22 +83,11 @@ sub oauth_scopes {
 
     $scopes = [$scopes] unless ref $scopes eq 'ARRAY';
 
-    #my @res = $Grant->verify_token_and_scope(
-        #is_refresh_token => 0,
-        #scopes           => [ @scopes ],
-        #auth_header      => $c->req->headers->header( 'Authorization' ),
-        #mojo_controller  => $c,
-    #);
-    #return $res[0];
-
     return sub {
-        #my $server = $plugin->server_class;
-        #my @res = $plugin->_verify_access_token_and_scope( $server,0, @$scopes );
         my @res = $plugin->grant->verify_token_and_scope(
-            is_refresh_token    => 0,
+            refresh_token    => 0,
             scopes              => $scopes,
-            auth_header         => $plugin->app->request->header( 'Authorization' ),
-            #mojo_controller     => $c
+            auth_header         => $plugin->app->request->header( 'Authorization' )||undef, #no header return empty array
         );
         if( not $res[0] ) {
             $plugin->app->response->status(400);
@@ -99,8 +105,6 @@ sub _authorization_request {
     my ( $c_id,$url,$type,$scope,$state )
         = map { $plugin->app->request->param( $_ ) // undef }
         qw/ client_id redirect_uri response_type scope state /;
-
-    my $server = $plugin->server_class;
 
     my @scopes = $scope ? split( / /,$scope ) : ();
 
@@ -142,45 +146,38 @@ sub _authorization_request {
     my ( $res,$error ) = $plugin->grant->verify_client(
         client_id       => $c_id,
         scopes          => [ @scopes ],
-        #should continue to pass uris there
+        redirect_uri    => $uri,
     );
-
-
-    #my ( $res,$error ) = $server->verify_client($plugin, $c_id, \@scopes, $url );
 
     if ( $res ) {
         if ( ! $plugin->grant->login_resource_owner( plugin => $plugin ) ) {
-        #if ( ! $server->login_resource_owner( $plugin ) ) {
-            $plugin->app->log( debug => "OAuth2::Server: Resource owner not logged in" );
+            $plugin->_debug( "OAuth2::Server: Resource owner not logged in" );
             # call to $resource_owner_logged_in method should have called redirect_to
             return;
         } else {
-            $plugin->app->log( debug =>  "OAuth2::Server: Resource owner is logged in" );
-            #$res = $server->confirm_by_resource_owner($plugin, $c_id, \@scopes );
+            $plugin->_debug(  "OAuth2::Server: Resource owner is logged in" );
 
             $res = $plugin->grant->confirm_by_resource_owner(
                 client_id       => $c_id,
                 scopes          => [ @scopes ],
-                #mojo_controller => $self,
             );
 
             if ( ! defined $res ) {
-                $plugin->app->log( debug =>  "OAuth2::Server: Resource owner to confirm scopes" );
+                $plugin->_debug(  "OAuth2::Server: Resource owner to confirm scopes" );
                 # call to $resource_owner_confirms method should have called redirect_to
                 return;
             }
             elsif ( $res == 0 ) {
-                $plugin->app->log( debug =>  "OAuth2::Server: Resource owner denied scopes" );
+                $plugin->_debug(  "OAuth2::Server: Resource owner denied scopes" );
                 $error = 'access_denied';
             }
         }
     }
 
     if ( $res ) {
-        $plugin->app->log( debug =>  "OAuth2::Server: Generating auth code for $c_id" );
+        $plugin->_debug(  "OAuth2::Server: Generating auth code for $c_id" );
         my $expires_in = $settings->{auth_code_ttl} // 600;
 
-         #my $auth_code = $server->generate_token($plugin, $expires_in, $c_id, \@scopes, 'auth', $url );
         my $auth_code = $plugin->grant->token(
             client_id       => $c_id,
             scopes          => [ @scopes ],
@@ -188,21 +185,15 @@ sub _authorization_request {
             redirect_uri    => $url,
         );
 
-        #$server->store_auth_code($plugin, $auth_code,$c_id,$expires_in,$url,@scopes );
         $plugin->grant->store_auth_code(
             auth_code       => $auth_code,
             client_id       => $c_id,
             expires_in      => $expires_in,#$Grant->auth_code_ttl,
             redirect_uri    => $url,
             scopes          => [ @scopes ],
-            #mojo_controller => $self,
         );
 
-        #XXX: to drop
-        warn Dumper( $plugin->grant->auth_codes ); use Data::Dumper;
-
         $uri->query_param_append( code  => $auth_code );
-
     } elsif ( $error ) {
         $uri->query_param_append( error => $error );
     } else {
@@ -250,17 +241,10 @@ sub _access_token_request {
     my ( $client,$error,$scope,$old_refresh_token,$user_id );
 
     if ( $grant_type eq 'refresh_token' ) {
-        #( $client,$error,$scope,$user_id ) = $plugin->_verify_access_token_and_scope(
-            #$server, $refresh_token
-        #);
-        warn "Changing refresh token $refresh_token";
         ( $client,$error,$scope,$user_id ) = $plugin->grant->verify_token_and_scope(
             refresh_token => $refresh_token,
-            #auth_header         => $plugin->app->request->header( 'Authorization' ),
-            #auth_header      => $plugin->req->headers->header( 'Authorization' ), #XXX: for what flow?
-            #mojo_controller  => $self
+            auth_header   => $plugin->app->request->header( 'Authorization' )||undef, #XXX: for what flow?
         );
-        warn ( $client,$error,$scope,$user_id );
         $old_refresh_token = $refresh_token;
     } else {
         ( $client,$error,$scope,$user_id ) = $plugin->grant->verify_auth_code(
@@ -268,20 +252,14 @@ sub _access_token_request {
             client_secret   => $client_secret,
             auth_code       => $auth_code,
             redirect_uri    => $url,
-            #mojo_controller => $self,
         )
-        #( $client,$error,$scope,$user_id ) = $server->verify_auth_code(
-            #$plugin, $client_id,$client_secret,$auth_code,$url
-        #);
     }
 
     if ( $client ) {
 
-        $plugin->app->log( debug =>  "OAuth2::Server: Generating access token for $client" );
+        $plugin->_debug(  "OAuth2::Server: Generating access token for $client" );
 
         my $expires_in    = $settings->{access_token_ttl} // 3600;
-        #my $access_token  = $server->generate_token($plugin, $expires_in,$client,$scope,'access',undef,$user_id );
-        #my $refresh_token = $server->generate_token($plugin, undef,$client,$scope,'refresh',undef,$user_id );
         my $access_token = $plugin->grant->token(
             client_id => $client,
             scopes    => $scope,
@@ -303,13 +281,7 @@ sub _access_token_request {
             expires_in        => $expires_in,
             scopes            => $scope,
             old_refresh_token => $old_refresh_token,
-            #mojo_controller   => $self,
         );
-        #$server->store_access_token(
-            #$plugin,
-            #$client,$auth_code,$access_token,$refresh_token,
-            #$expires_in,$scope,$old_refresh_token
-        #);
 
         $status = 200;
         $json_response = {
@@ -336,35 +308,7 @@ sub _access_token_request {
     return $plugin->app->send_as( JSON =>  $json_response );
 }
 
-sub _verify_access_token_and_scope {
-    my ($plugin, $server, $refresh_token, @scopes) = @_;
-    my $settings = $plugin->config;
-
-    my $access_token;
-
-    if ( ! $refresh_token ) {
-        if ( my $auth_header = $plugin->app->request->header( 'Authorization' ) ) {
-            my ( $auth_type,$auth_access_token ) = split( / /,$auth_header );
-
-            if ( $auth_type ne 'Bearer' ) {
-                $plugin->app->log( debug =>  "OAuth2::Server: Auth type is not 'Bearer'" );
-                return ( 0,'invalid_request' );
-            } else {
-                $access_token = $auth_access_token;
-            }
-        } else {
-            $plugin->app->log( debug =>  "OAuth2::Server: Authorization header missing" );
-            return ( 0,'invalid_request' );
-        }
-    } else {
-        $access_token = $refresh_token;
-    }
-
-    return $server->verify_access_token($plugin, $access_token,\@scopes,$refresh_token );
-}
-
 plugin_keywords 'oauth_scopes';
-#register_plugin;
 
 1;
 __END__

@@ -6,6 +6,7 @@ use HTTP::Request::Common;
 
 {
     package DefaultRoute;
+    BEGIN { $ENV{DANCER_ENVIRONMENT} = 'routes-present'; }
     use Dancer2;
     use Dancer2::Plugin::OAuth2::Server;
 }
