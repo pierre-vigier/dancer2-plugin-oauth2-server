@@ -60,7 +60,7 @@ sub BUILD {
 sub _build_server_class {
     my ($plugin) = shift;
     my $settings = $plugin->config;
-    my $server_class = $settings->{server_class}//"Dancer2::Plugin::OAuth2::Server::Simple";
+    my $server_class = $settings->{server_class};
     my ($ok, $error) = try_load_class($server_class);
     if (! $ok) {
         confess "Cannot load server class $server_class: $error";
@@ -213,8 +213,6 @@ sub _access_token_request {
     my ( $client_id,$client_secret,$grant_type,$auth_code,$url,$refresh_token )
         = map { $plugin->app->request->param( $_ ) // undef }
         qw/ client_id client_secret grant_type code redirect_uri refresh_token /;
-
-    my $server = $plugin->server_class;
 
     if (
         ! defined( $grant_type )
