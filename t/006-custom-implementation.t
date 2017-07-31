@@ -10,7 +10,6 @@ use JSON;
 {
     package Implementation;
     use Moo;
-    with 'Dancer2::Plugin::OAuth2::Server::Role';
 
     sub login_resource_owner      {
         my ($self, %args)  = @_;

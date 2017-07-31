@@ -21,28 +21,31 @@ sub BUILD {
     my $authorization_route = $settings->{authorize_route}//'/oauth/authorize';
     my $access_token_route  = $settings->{access_token_route}//'/oauth/access_token';
 
-    if( $settings->{server_class} ) {
-        my $server = $plugin->server_class;
-        $plugin->grant(
-            Net::OAuth2::AuthorizationServer->new->auth_code_grant(
-                verify_client_cb             => sub { $server->verify_client( plugin => $plugin, @_ ); },
-                store_auth_code_cb           => sub { $server->store_auth_code( plugin => $plugin, @_ ); },
-                verify_auth_code_cb          => sub { $server->verify_auth_code( plugin => $plugin, @_ ); },
-                store_access_token_cb        => sub { $server->store_access_token( plugin => $plugin, @_ ); },
-                verify_access_token_cb       => sub { $server->verify_access_token( plugin => $plugin, @_ ); },
-                login_resource_owner_cb      => sub { $server->login_resource_owner( plugin => $plugin, @_ ); },
-                confirm_by_resource_owner_cb => sub { $server->confirm_by_resource_owner( plugin => $plugin, @_ ); },
-            )
-        );
-    } elsif( $settings->{clients} ) {
-        $plugin->grant(
-            Net::OAuth2::AuthorizationServer->new->auth_code_grant(
-                clients => $settings->{clients}
-            )
-        );
-    } else {
-        die 'Provide either an implementation class or a clients setting';
-    }
+    my $server = $plugin->server_class;
+    use Data::Dumper;
+    $plugin->grant(
+        Net::OAuth2::AuthorizationServer->new->auth_code_grant(
+            (defined $server
+                ?(
+                    map {
+                        my $sub = $server->can( $_ );
+                        +"${_}_cb" => (
+                            $sub
+                            ? sub { $server->$sub( plugin => $plugin, @_ ) }
+                            : undef )
+                    } qw<
+                      verify_client store_auth_code verify_auth_code
+                      store_access_token verify_access_token
+                      login_resource_owner confirm_by_resource_owner
+                    >
+                )
+                : ()
+            ),
+            ( exists $settings->{clients} ? (clients => $settings->{clients} ) : () )
+        ),
+    );
+
+    #$JWTCallback = $config->{jwt_claims};
 
     $plugin->app->add_route(
         method  => 'get',
@@ -61,6 +64,10 @@ sub _build_server_class {
     my ($plugin) = shift;
     my $settings = $plugin->config;
     my $server_class = $settings->{server_class};
+    unless( $server_class ) {
+        return;
+    }
+
     my ($ok, $error) = try_load_class($server_class);
     if (! $ok) {
         confess "Cannot load server class $server_class: $error";
