@@ -1,0 +1,18 @@
+#logger: Null
+logger: Console
+plugins:
+  "OAuth2::Server":
+    debug: 0
+    jwt_secret: 'nova scotia scova notia'
+    server_class: 'Implementation'
+    clients:
+      client1:
+        client_secret: secret
+        scopes:
+          identity: 1
+          other: 0
+      client2:
+        client_secret: secret2
+        scopes:
+          identity: 1
+          other: 1

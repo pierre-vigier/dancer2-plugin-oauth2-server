@@ -14,6 +14,7 @@ use Net::OAuth2::AuthorizationServer;
 has server_class => ( is => 'lazy' );
 has grant => ( is => 'rw' );
 has debug => ( is => 'ro', from_config => 'debug', default => sub { 0 } );
+has jwt_claims => ( is => 'rw', default => sub { undef } );
 
 sub BUILD {
     my $plugin = shift;
@@ -37,15 +38,18 @@ sub BUILD {
                       verify_client store_auth_code verify_auth_code
                       store_access_token verify_access_token
                       login_resource_owner confirm_by_resource_owner
-                    >
+                    >,
                 )
                 : ()
             ),
-            ( exists $settings->{clients} ? (clients => $settings->{clients} ) : () )
+            ( exists $settings->{clients} ? (clients => $settings->{clients} ) : () ),
+            ( exists $settings->{jwt_secret} ? (jwt_secret => $settings->{jwt_secret} ) : () ),
         ),
     );
 
-    #$JWTCallback = $config->{jwt_claims};
+    if( defined $server and $server->can( 'jwt_claims' ) ) {
+        $plugin->jwt_claims( sub { my $args = shift @_; $server->jwt_claims( plugin => $plugin, %$args, @_ ) } );
+    }
 
     $plugin->app->add_route(
         method  => 'get',
@@ -182,6 +186,8 @@ sub _authorization_request {
     }
 
     if ( $res ) {
+        #short circuit for implicit grant here
+
         $plugin->_debug(  "OAuth2::Server: Generating auth code for $c_id" );
         my $expires_in = $settings->{auth_code_ttl} // 600;
 
@@ -190,6 +196,7 @@ sub _authorization_request {
             scopes          => [ @scopes ],
             type            => 'auth',
             redirect_uri    => $url,
+            jwt_claims_cb   => $plugin->jwt_claims,
         );
 
         $plugin->grant->store_auth_code(
@@ -270,12 +277,14 @@ sub _access_token_request {
             scopes    => $scope,
             type      => 'access',
             user_id   => $user_id,
+            jwt_claims_cb   => $plugin->jwt_claims,
         );
         my $refresh_token = $plugin->grant->token(
             client_id => $client,
             scopes    => $scope,
             type      => 'refresh',
             user_id   => $user_id,
+            jwt_claims_cb   => $plugin->jwt_claims,
         );
 
         $plugin->grant->store_access_token(
