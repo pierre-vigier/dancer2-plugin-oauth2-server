@@ -51,7 +51,7 @@ register 'oauth_scopes' => sub {
         my @res = _verify_access_token_and_scope( $dsl, $settings, $server,0, @$scopes );
         if( not $res[0] ) {
             $dsl->status( 400 );
-            return $dsl->to_json( { error => $res[1] } );
+            return $dsl->send_as( JSON => { error => $res[1] } );
         } else {
             $dsl->app->request->var( oauth_access_token => $res[0] );
             goto $code_ref;
@@ -75,8 +75,8 @@ sub _authorization_request {
             or $type ne 'code'
     ) {
         $dsl->status( 400 );
-        return $dsl->to_json(
-            {
+        return $dsl->send_as(
+            JSON => {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: client_id, '
                 . 'response_type;'
@@ -93,8 +93,8 @@ sub _authorization_request {
             and ! length $state
     ) {
         $dsl->status( 400 );
-        return $dsl->to_json(
-            {
+        return $dsl->send_as(
+            JSON => {
                 error             => 'invalid_request',
                 error_description => 'the request was missing : state ',
                 error_uri         => '',
@@ -163,8 +163,8 @@ sub _access_token_request {
             or ( $grant_type eq 'authorization_code' and ! defined( $url ) )
     ) {
         $dsl->status( 400 );
-        return $dsl->to_json(
-            {
+        return $dsl->send_as(
+            JSON => {
                 error             => 'invalid_request',
                 error_description => 'the request was missing one of: grant_type, '
                 . 'client_id, client_secret, code, redirect_uri;'
@@ -227,7 +227,7 @@ sub _access_token_request {
     $dsl->header( 'Pragma'        => 'no-cache' );
 
     $dsl->status( $status );
-    return $dsl->to_json( $json_response );
+    return $dsl->send_as( JSON => $json_response );
 }
 
 sub _verify_access_token_and_scope {
