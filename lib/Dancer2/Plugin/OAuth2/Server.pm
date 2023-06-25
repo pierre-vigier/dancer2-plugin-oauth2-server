@@ -223,8 +223,8 @@ sub _access_token_request {
         };
     }
 
-    $dsl->header( 'Cache-Control' => 'no-store' );
-    $dsl->header( 'Pragma'        => 'no-cache' );
+    $dsl->response_header( 'Cache-Control' => 'no-store' );
+    $dsl->response_header( 'Pragma'        => 'no-cache' );
 
     $dsl->status( $status );
     return $dsl->send_as( JSON => $json_response );
