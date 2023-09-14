@@ -1,6 +1,6 @@
 requires 'perl', '5.008005';
 
-requires "Dancer2" => "0.163000";
+requires "Dancer2" => "0.200000";
 requires "Dancer2::Plugin";
 requires "Crypt::PRNG";
 requires "URI";
