@@ -4,7 +4,7 @@
 
 Dancer2::Plugin::OAuth2::Server - Easier implementation of an OAuth2 Authorization
 Server / Resource Server with Dancer2
-Port of Mojolicious implementation : https://github.com/G3S/mojolicious-plugin-oauth2-server
+Port of Mojolicious implementation : https://github.com/Humanstate/mojolicious-plugin-oauth2-server
 
 # SYNOPSIS
 
@@ -207,7 +207,17 @@ message (almost certainly 'invalid\_grant' in this case)
 
 # AUTHOR
 
-Pierre Vigier &lt;pierre.vigier@gmail.com>
+Pierre Vigier <pierre.vigier@gmail.com>
+
+# CONTRIBUTORS
+
+Orignal plugin for mojolicious:
+
+Lee Johnson - `leejo@cpan.org`
+
+With contributions from:
+
+Peter Mottram `peter@sysnix.com`
 
 # COPYRIGHT
 
