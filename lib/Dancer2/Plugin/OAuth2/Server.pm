@@ -472,6 +472,16 @@ message (almost certainly 'invalid_grant' in this case)
 
 Pierre Vigier E<lt>pierre.vigier@gmail.comE<gt>
 
+=head1 CONTRIBUTORS
+
+Orignal plugin for mojolicious:
+
+Lee Johnson - C<leejo@cpan.org>
+
+With contributions from:
+
+Peter Mottram C<peter@sysnix.com>
+
 =head1 COPYRIGHT
 
 Copyright 2016- Pierre Vigier
